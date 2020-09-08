@@ -4,6 +4,7 @@
 #include <set>
 #include <map>
 #include <variant>
+#include <memory>
 #include <assert.h>
 using namespace std;
 
@@ -13,13 +14,13 @@ class Identifier
 
     static int last_id;
     static unordered_map<string, int> id_map;
-    static unordered_map<string, int> name_map;
-    static id_for_name(const string& name)
+    static unordered_map<int, string> name_map;
+    static int id_for_name(const string& name)
     {
         auto res = id_map.insert({name, last_id});
         if (res.second)
         {
-            name_map.insert({res})
+            name_map.insert({last_id, name});
             ++last_id;
         }
         return res.first->second;
@@ -30,7 +31,7 @@ public:
     Identifier (const string& name):
         id(id_for_name(name)) {}
 
-    Identifier (Identifier id):
+    Identifier (const Identifier& id):
         id(id.id) {}
 
     string get_name()
@@ -51,7 +52,7 @@ public:
 
 class Value
 {
-    typedef shared_ptr<Value> ValuePtr;
+    typedef Value* ValuePtr;
     typedef set<Identifier> IdentifierSet;
     typedef map<Identifier, ValuePtr> IdentifierMap;
 
@@ -91,7 +92,7 @@ class Value
             {
                 newArgs.push_back(arg->substitute(idMap));
             }
-            Constructor(id, newArgs);
+            return Constructor(id, newArgs);
         }
     };
 
@@ -105,12 +106,13 @@ class Value
         public:
 
             Case(ValuePtr teml, ValuePtr body):
-                templ(templ)
+                templ(templ),
                 body(body) {}
 
             Case substitute(IdentifierMap& idMap)
             {
                 /// TO-DO: implement
+                return *this;
             }
         };
 
@@ -130,7 +132,7 @@ class Value
 
         Application substitute(IdentifierMap& idMap)
         {
-            Application(fun->substitute, arg->substitute);
+            return Application(fun->substitute(idMap), arg->substitute(idMap));
         }
     };
 
@@ -147,7 +149,7 @@ class Value
         //remove irrelevant mappings
         IdentifierSet newFree = free;
         std::vector<std::pair<Identifier, ValuePtr>> removed;
-        for (auto it = idMap.begin(); id != idMap.end(); ++id)
+        for (auto it = idMap.begin(); it != idMap.end(); ++it)
         {
             auto it2 = newFree.find(it->first);
             if (it2 == newFree.end())
@@ -183,6 +185,8 @@ class Value
         {
             idMap.insert(idValue);
         }
+
+        return this;
     }
 
 public:
