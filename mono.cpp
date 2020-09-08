@@ -34,17 +34,17 @@ public:
     Identifier (const Identifier& id):
         id(id.id) {}
 
-    string get_name()
+    string get_name() const
     {
         return name_map[id];
     }
 
-    bool operator==(Identifier other)
+    bool operator==(Identifier other) const
     {
         return id == other.id;
     }
 
-    bool operator<(Identifier other)
+    bool operator<(Identifier other) const
     {
         return id < other.id;
     }
@@ -65,7 +65,7 @@ class Value
         Variable(Identifier id):
             id(id) {}
 
-        ValuePtr substitute(IdentifierMap& idMap)
+        ValuePtr substitute(IdentifierMap& idMap) const
         {
             auto it = idMap.find(id);
             assert(it != idMap.end());
@@ -85,7 +85,7 @@ class Value
             id(id),
             args(args) {}
 
-        Constructor substitute(IdentifierMap& idMap)
+        Constructor substitute(IdentifierMap& idMap) const
         {
             vector<ValuePtr> newArgs;
             for (auto arg : args)
@@ -109,7 +109,7 @@ class Value
                 templ(templ),
                 body(body) {}
 
-            Case substitute(IdentifierMap& idMap)
+            Case substitute(IdentifierMap& idMap) const
             {
                 /// TO-DO: implement
                 return *this;
@@ -130,7 +130,7 @@ class Value
             fun(fun),
             arg(arg) {}
 
-        Application substitute(IdentifierMap& idMap)
+        Application substitute(IdentifierMap& idMap) const
         {
             return Application(fun->substitute(idMap), arg->substitute(idMap));
         }
