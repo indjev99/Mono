@@ -8,6 +8,9 @@
 #include <assert.h>
 using namespace std;
 
+template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
+template<class... Ts> overload(Ts...) -> overload<Ts...>;
+
 class Identifier
 {
     int id;
@@ -50,9 +53,9 @@ public:
     }
 };
 
-class Value
+class Value : public std::enable_shared_from_this<Value>
 {
-    typedef Value* ValuePtr;
+    typedef shared_ptr<Value> ValuePtr;
     typedef set<Identifier> IdentifierSet;
     typedef map<Identifier, ValuePtr> IdentifierMap;
 
@@ -67,9 +70,7 @@ class Value
 
         ValuePtr substitute(IdentifierMap& idMap) const
         {
-            auto it = idMap.find(id);
-            assert(it != idMap.end());
-            return it->second;
+            return idMap[id];
         }
     };
 
@@ -80,10 +81,10 @@ class Value
 
     public:
 
-        /// TO-DO: move constructors
-        Constructor(Identifier id, const vector<ValuePtr>& args):
+        // TO-DO: move constructors
+        Constructor(Identifier id, vector<ValuePtr>&& args):
             id(id),
-            args(args) {}
+            args(forward<vector<ValuePtr>>(args)) {}
 
         Constructor substitute(IdentifierMap& idMap) const
         {
@@ -92,7 +93,7 @@ class Value
             {
                 newArgs.push_back(arg->substitute(idMap));
             }
-            return Constructor(id, newArgs);
+            return Constructor(id, move(newArgs));
         }
     };
 
@@ -111,12 +112,20 @@ class Value
 
             Case substitute(IdentifierMap& idMap) const
             {
-                /// TO-DO: implement
+                // TO-DO: implement
                 return *this;
             }
         };
 
         vector<Case> cases;
+
+    public:
+
+        Function substitute(IdentifierMap& idMap) const
+        {
+            // TO-DO: implement
+            return *this;
+        }
     };
 
     class Application
@@ -136,17 +145,20 @@ class Value
         }
     };
 
-    // consider lazy substitution variant type
+    typedef variant<Variable, Constructor, Function, Application> NodeType;
 
+    NodeType result;
     IdentifierSet free;
 
-    variant<Variable, Constructor, Function, Application> result;
+    Value(NodeType&& result, IdentifierSet&& free):
+        result(forward<NodeType>(result)),
+        free(forward<IdentifierSet>(free)) {}
 
     ValuePtr substitute(IdentifierMap& idMap)
     {
-        ///TO-DO: This can be done linearly
+        // TO-DO: This can be done linearly
 
-        //remove irrelevant mappings
+        // remove irrelevant mappings
         IdentifierSet newFree = free;
         std::vector<std::pair<Identifier, ValuePtr>> removed;
         for (auto it = idMap.begin(); it != idMap.end(); ++it)
@@ -163,21 +175,22 @@ class Value
             }
         }
 
+        ValuePtr newValue = shared_from_this();
+
         if (!idMap.empty())
         {
-            switch (result.index())
+            visit(overload
             {
-            case 0:
-
-            case 1:
-
-            case 2:
-
-            case 3:
-
-            default:
-                assert(false);
-            }
+                [&](Variable& var)
+                {
+                    assert(newFree.empty());
+                    newValue = var.substitute(idMap);
+                },
+                [&](const auto& res)
+                {
+                    newValue = ValuePtr(new Value(res.substitute(idMap), move(newFree)));
+                }
+            }, result);
         }
 
         // restore the removed mappings
@@ -186,7 +199,7 @@ class Value
             idMap.insert(idValue);
         }
 
-        return this;
+        return newValue;
     }
 
 public:
