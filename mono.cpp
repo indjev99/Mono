@@ -59,7 +59,8 @@ class Value : public std::enable_shared_from_this<Value>
     typedef set<Identifier> IdentifierSet;
     typedef map<Identifier, ValuePtr> IdentifierMap;
 
-    static void merge_sets(IdentifierSet& left, const IdentifierSet& right)
+    template <typename Container>
+    static void merge_sets(IdentifierSet& left, Container right)
     {
         for (auto id : right)
         {
@@ -106,6 +107,8 @@ class Value : public std::enable_shared_from_this<Value>
 
     class Function
     {
+    public:
+    
         class Case
         {
             ValuePtr templ;
@@ -118,6 +121,18 @@ class Value : public std::enable_shared_from_this<Value>
             Case(ValuePtr teml, ValuePtr body):
                 templ(templ),
                 body(body) {}
+
+            IdentifierSet free() const
+            {
+                // TO-DO: This can be done linearly
+
+                IdentifierSet free = body->free;
+                for (auto id : templ->free)
+                {
+                    free.erase(id);
+                }
+                return free;
+            }
 
             Case substitute(IdentifierMap& idMap) const
             {
@@ -146,14 +161,16 @@ class Value : public std::enable_shared_from_this<Value>
                 }
 
                 // restore the removed mappings
-                for (const auto& idValue : removed)
+                for (auto idValue : removed)
                 {
-                    idMap.insert(idValue);
+                    idMap.insert(move(idValue));
                 }
 
                 return newCase;
             }
         };
+    
+    private:
 
         vector<Case> cases;
 
@@ -247,15 +264,17 @@ class Value : public std::enable_shared_from_this<Value>
         }
 
         // restore the removed mappings
-        for (const auto& idValue : removed)
+        for (auto idValue : removed)
         {
-            idMap.insert(idValue);
+            idMap.insert(move(idValue));
         }
 
         return newValue;
     }
 
 public:
+
+    typedef Function::Case FunctionCase;
 
     static ValuePtr variable(Identifier id)
     {
@@ -266,16 +285,27 @@ public:
     static ValuePtr constructor(Identifier id, vector<ValuePtr> args)
     {
         IdentifierSet free;
-        for (const auto& arg: args)
+        for (auto arg : args)
         {
             merge_sets(free, arg->free);
         }
         return construct(Constructor(id, move(args)), move(free));
     }
 
-    static ValuePtr function()
+    static FunctionCase functionCase(ValuePtr templ, ValuePtr body)
     {
-        // TO-DO: implement
+        return FunctionCase(templ, body);
+    }
+
+    static ValuePtr function(vector<FunctionCase> cases)
+    {
+        IdentifierSet free;
+        for (const auto& currCase : cases)
+        {
+            merge_sets(free, currCase.free());
+        }
+        return construct(Function(move(cases)), move(free));
+
     }
 
     static ValuePtr application(ValuePtr fun, ValuePtr arg)
@@ -290,7 +320,6 @@ public:
     {
         return false;
     }
-
 };
 
 int main()
