@@ -104,6 +104,8 @@ class Value : public std::enable_shared_from_this<Value>
             ValuePtr templ;
             ValuePtr body;
 
+            Case() {}
+            
         public:
 
             Case(ValuePtr teml, ValuePtr body):
@@ -112,8 +114,37 @@ class Value : public std::enable_shared_from_this<Value>
 
             Case substitute(IdentifierMap& idMap) const
             {
-                // TO-DO: implement
-                return *this;
+                // TO-DO: This can be done linearly, also merged with one in main substitute
+
+                // remove bound mappings
+                std::vector<std::pair<Identifier, ValuePtr>> removed;
+                for (auto it = idMap.begin(); it != idMap.end(); ++it)
+                {
+                    auto it2 = templ->free.find(it->first);
+                    if (it2 != templ->free.end())
+                    {
+                        removed.push_back(*it);
+                        it = idMap.erase(it);
+                    }
+                }
+
+                Case newCase;
+                if (!idMap.empty())
+                {
+                    newCase = Case(templ, body->substitute(idMap));
+                }
+                else
+                {
+                    newCase = *this;
+                }
+
+                // restore the removed mappings
+                for (const auto& idValue : removed)
+                {
+                    idMap.insert(idValue);
+                }
+
+                return newCase;
             }
         };
 
@@ -121,10 +152,17 @@ class Value : public std::enable_shared_from_this<Value>
 
     public:
 
+        Function(vector<Case>&& cases):
+            cases(forward<vector<Case>>(cases)) {}
+
         Function substitute(IdentifierMap& idMap) const
         {
-            // TO-DO: implement
-            return *this;
+            vector<Case> newCases;
+            for (const auto& currCase : cases)
+            {
+                newCases.push_back(currCase.substitute(idMap));
+            }
+            return Function(move(newCases));
         }
     };
 
@@ -175,8 +213,7 @@ class Value : public std::enable_shared_from_this<Value>
             }
         }
 
-        ValuePtr newValue = shared_from_this();
-
+        ValuePtr newValue;
         if (!idMap.empty())
         {
             visit(overload
@@ -192,6 +229,11 @@ class Value : public std::enable_shared_from_this<Value>
                 }
             }, result);
         }
+        else
+        {
+            newValue = shared_from_this();
+        }
+        
 
         // restore the removed mappings
         for (const auto& idValue : removed)
