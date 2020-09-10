@@ -59,6 +59,14 @@ class Value : public std::enable_shared_from_this<Value>
     typedef set<Identifier> IdentifierSet;
     typedef map<Identifier, ValuePtr> IdentifierMap;
 
+    static void merge_sets(IdentifierSet& left, const IdentifierSet& right)
+    {
+        for (auto id : right)
+        {
+            left.insert(id);
+        }
+    }
+
     class Variable
     {
         Identifier id;
@@ -81,7 +89,6 @@ class Value : public std::enable_shared_from_this<Value>
 
     public:
 
-        // TO-DO: move constructors
         Constructor(Identifier id, vector<ValuePtr>&& args):
             id(id),
             args(forward<vector<ValuePtr>>(args)) {}
@@ -105,7 +112,7 @@ class Value : public std::enable_shared_from_this<Value>
             ValuePtr body;
 
             Case() {}
-            
+
         public:
 
             Case(ValuePtr teml, ValuePtr body):
@@ -192,6 +199,11 @@ class Value : public std::enable_shared_from_this<Value>
         result(forward<NodeType>(result)),
         free(forward<IdentifierSet>(free)) {}
 
+    static ValuePtr construct(NodeType&& result, IdentifierSet&& free)
+    { 
+        return ValuePtr(new Value(forward<NodeType>(result), forward<IdentifierSet>(free)));
+    }
+
     ValuePtr substitute(IdentifierMap& idMap)
     {
         // TO-DO: This can be done linearly
@@ -225,7 +237,7 @@ class Value : public std::enable_shared_from_this<Value>
                 },
                 [&](const auto& res)
                 {
-                    newValue = ValuePtr(new Value(res.substitute(idMap), move(newFree)));
+                    newValue = construct(res.substitute(idMap), move(newFree));
                 }
             }, result);
         }
@@ -233,7 +245,6 @@ class Value : public std::enable_shared_from_this<Value>
         {
             newValue = shared_from_this();
         }
-        
 
         // restore the removed mappings
         for (const auto& idValue : removed)
@@ -245,6 +256,35 @@ class Value : public std::enable_shared_from_this<Value>
     }
 
 public:
+
+    static ValuePtr variable(Identifier id)
+    {
+        IdentifierSet free = {id};
+        return construct(Variable(id), move(free));
+    }
+
+    static ValuePtr constructor(Identifier id, vector<ValuePtr> args)
+    {
+        IdentifierSet free;
+        for (const auto& arg: args)
+        {
+            merge_sets(free, arg->free);
+        }
+        return construct(Constructor(id, move(args)), move(free));
+    }
+
+    static ValuePtr function()
+    {
+        // TO-DO: implement
+    }
+
+    static ValuePtr application(ValuePtr fun, ValuePtr arg)
+    {
+        IdentifierSet free;
+        merge_sets(free, fun->free);
+        merge_sets(free, arg->free);
+        return construct(Application(fun, arg), move(free));
+    }
 
     bool match(Value& other)
     {
